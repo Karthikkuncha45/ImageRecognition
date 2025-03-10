@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Recognition</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">Image Recognition</h1>
+        <div class="row">
+            <div class="col-md-6 mx-auto">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="inputType" id="cameraRadio" value="camera" checked>
+                    <label class="form-check-label" for="cameraRadio">Use Camera</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="inputType" id="uploadRadio" value="upload">
+                    <label class="form-check-label" for="uploadRadio">Upload Image</label>
+                </div>
+                <div id="cameraSection">
+                    <video id="webcam" autoplay class="w-100 mt-3"></video>
+                    <button onclick="captureImage()" class="btn btn-primary mt-2">Capture and Predict</button>
+                </div>
+                <div id="uploadSection" style="display: none;">
+                    <input type="file" id="fileInput" class="form-control mt-3">
+                    <button onclick="uploadImage()" class="btn btn-primary mt-2">Upload and Predict</button>
+                </div>
+            </div>
+        </div>
+        <div class="mt-5">
+            <h3>Results</h3>
+            <ul id="results"></ul>
+        </div>
+    </div>
+    <script>
+        const webcamElement = document.getElementById("webcam");
+        const resultsElement = document.getElementById("results");
+        const cameraSection = document.getElementById("cameraSection");
+        const uploadSection = document.getElementById("uploadSection");
+        const cameraRadio = document.getElementById("cameraRadio");
+        const uploadRadio = document.getElementById("uploadRadio");
+
+        // Toggle between camera and upload sections
+        cameraRadio.addEventListener("change", () => {
+            cameraSection.style.display = "block";
+            uploadSection.style.display = "none";
+        });
+        uploadRadio.addEventListener("change", () => {
+            cameraSection.style.display = "none";
+            uploadSection.style.display = "block";
+        });
+
+        // Set up webcam
+        async function setupWebcam() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            webcamElement.srcObject = stream;
+        }
+
+        // Capture image from webcam
+        async function captureImage() {
+            const canvas = document.createElement("canvas");
+            canvas.width = webcamElement.videoWidth;
+            canvas.height = webcamElement.videoHeight;
+            canvas.getContext("2d").drawImage(webcamElement, 0, 0, canvas.width, canvas.height);
+            const image = canvas.toDataURL("image/jpeg");
+            await predictImage(image);
+        }
+
+        // Upload image from file input
+        async function uploadImage() {
+            const fileInput = document.getElementById("fileInput");
+            const file = fileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const image = event.target.result;
+                await predictImage(image);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Send image to backend for prediction
+        async function predictImage(image) {
+            const formData = new FormData();
+            formData.append("file", dataURLtoFile(image, "image.jpg"));
+
+            const response = await fetch("/predict", {
+                method: "POST",
+                body: formData,
+            });
+            const results = await response.json();
+            displayResults(results);
+        }
+
+        // Display prediction results
+        function displayResults(results) {
+            resultsElement.innerHTML = results.map(result => `
+                <li>${result.label}: ${(result.probability * 100).toFixed(2)}%</li>
+            `).join("");
+        }
+
+        // Convert data URL to file
+        function dataURLtoFile(dataURL, filename) {
+            const arr = dataURL.split(",");
+            const mime = arr[0].match(/:(.*?);/)[1];
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while (n--) {
+                u8arr[n] = bstr.charCodeAt(n);
+            }
+            return new File([u8arr], filename, { type: mime });
+        }
+
+        setupWebcam();
+    </script>
+</body>
+</html>
